@@ -27,7 +27,13 @@ if [ -n "$2" ] || [ ! -f "${INSTALL_LOC}/lib/libta_lib.a" ]; then
   else
     # Don't install with sudo
     make install
+
+    # Registro manual del path de la librería para el linker
+    echo "/usr/local/lib" > /etc/ld.so.conf.d/ta-lib.conf
+    ldconfig
   fi
+
+    
 
   cd .. && rm -rf ./ta-lib/
 else
