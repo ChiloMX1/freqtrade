@@ -52,7 +52,7 @@
 
     "telegram": {
         "enabled": true,
-        "token": "8140611361:AAFB1o9HmGVQ9iDeiKvxKAb1xjkUl_LoK6s",
+        "token": "7517847545:AAE08LlnP0jN7j2LY1AogPIxNTVEyL1jcZ0",
         "chat_id": "7372956557"
     },
     "api_server": {
@@ -61,7 +61,7 @@
         "listen_port": 8080,
         "verbosity": "error",
         "enable_openapi": false,
-        "jwt_secret_key": "7517847545:AAE08LlnP0jN7j2LY1AogPIxNTVEyL1jcZ0",
+        "jwt_secret_key": "da0037f8e4d868d8ebd65cfe7794479ebcf7fe8f08d6a2cabbfc60e84b2b9bf5",
         "ws_token": "pyVvFejEjEqAn3CoCo5scXQUOAqb3ZPYrg",
         "CORS_origins": [],
         "username": "freqtrader",
