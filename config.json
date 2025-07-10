@@ -52,7 +52,7 @@
 
     "telegram": {
         "enabled": true,
-        "token": "7666451380:AAFK-KF3Uxa_KRLlIX4YSa2zfJRVO3wlfnI",
+        "token": "8140611361:AAFB1o9HmGVQ9iDeiKvxKAb1xjkUl_LoK6s",
         "chat_id": "7372956557"
     },
     "api_server": {
@@ -67,7 +67,7 @@
         "username": "freqtrader",
         "password": "Cheese2025."
     },
-    "bot_name": "freqtrade",
+    "bot_name": "CryptoshadowMx_bot",
     "initial_state": "running",
     "force_entry_enable": false,
     "internals": {
