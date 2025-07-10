@@ -1,11 +1,11 @@
 
 {
     "$schema": "https://schema.freqtrade.io/schema.json",
-    "max_open_trades": 1,
+    "max_open_trades": 2,
     "stake_currency": "USD",
-    "stake_amount": 10,
+    "stake_amount": 5,
     "strategy": "MiEstrategia",
-    "tradable_balance_ratio": 0.99,
+    "tradable_balance_ratio": 1.0,
     "fiat_display_currency": "USD",
     "dry_run": false,
     "dry_run_wallet": 0,
