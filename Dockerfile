@@ -62,7 +62,7 @@ USER ftuser
 COPY --chown=ftuser:ftuser . /freqtrade/
 
 RUN pip install -e . --user --no-cache-dir --no-build-isolation \
-  && mkdir /freqtrade/user_data/ \
+  && mkdir -p /freqtrade/user_data/ \
   && freqtrade install-ui
 
 RUN ls -la /usr/local/lib | grep ta_lib || echo "ta_lib not found, continuing..."
