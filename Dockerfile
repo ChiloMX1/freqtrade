@@ -27,16 +27,23 @@ RUN  apt-get update \
   && apt-get clean \
   && pip install --upgrade pip wheel
 
-# Install TA-lib
-COPY build_helpers/* /tmp/
-RUN cd /tmp && /tmp/install_ta-lib.sh && rm -r /tmp/*ta-lib*
+# Instala TA-Lib 0.6.4 desde código fuente
+COPY build_helpers/ta-lib-0.6.4-src.tar.gz /tmp/
+COPY build_helpers/install_ta-lib.sh /tmp/
+
+RUN chmod +x /tmp/install_ta-lib.sh \
+ && cd /tmp && bash install_ta-lib.sh \
+ && rm -rf /tmp/ta-lib*
+
 ENV LD_LIBRARY_PATH=/usr/local/lib
+RUN ldconfig
+
 
 # Install dependencies
 COPY --chown=ftuser:ftuser requirements.txt requirements-hyperopt.txt /freqtrade/
 USER ftuser
-RUN  pip install --user --no-cache-dir "numpy<3.0" \
-  && pip install --user --no-cache-dir -r requirements-hyperopt.txt
+RUN  pip install --no-cache-dir "numpy<3.0" \
+  && pip install --no-cache-dir -r requirements-hyperopt.txt
 
 # Copy dependencies to runtime-image
 FROM base AS runtime-image
@@ -52,6 +59,9 @@ COPY --chown=ftuser:ftuser . /freqtrade/
 RUN pip install -e . --user --no-cache-dir --no-build-isolation \
   && mkdir /freqtrade/user_data/ \
   && freqtrade install-ui
+
+RUN ls -la /usr/local/lib | grep ta_lib
+
 
 ENTRYPOINT ["freqtrade"]
 # Default to trade mode
