@@ -1,0 +1,76 @@
+
+{
+    "$schema": "https://schema.freqtrade.io/schema.json",
+    "max_open_trades": 1,
+    "stake_currency": "USDT",
+    "stake_amount": 10,
+    "strategy": "MiEstrategia",
+    "tradable_balance_ratio": 0.99,
+    "fiat_display_currency": "MXN",
+    "dry_run": false,
+    "dry_run_wallet": 0,
+    "cancel_open_orders_on_exit": true,
+    "trading_mode": "spot",
+    "margin_mode": "isolated",
+    "unfilledtimeout": {
+        "entry": 10,
+        "exit": 10,
+        "exit_timeout_count": 0,
+        "unit": "minutes"
+    },
+    "entry_pricing": {
+        "price_side": "other",
+        "use_order_book": true,
+        "order_book_top": 1,
+        "price_last_balance": 0.0,
+        "check_depth_of_market": {
+            "enabled": false,
+            "bids_to_ask_delta": 1
+        }
+    },
+    "exit_pricing":{
+        "price_side": "same",
+        "use_order_book": true,
+        "order_book_top": 1
+    },
+    "exchange": {
+        "name": "binance",
+        "key": "IJE24Jokalboh9S30zG93UeVWIuVUMbluMLHCLqVDYnFR2XBSR8bmGED2EhB5dAm",
+        "secret": "QowplHW2ycPkyHXpeEwrh7qjUPk5h1pgtSIFZS0J2ZutRMLmPmbnhgvcKkQhWDW5",
+        "ccxt_config": {},
+        "ccxt_async_config": {},
+        "pair_whitelist": [ "DOGE/USDT"
+        ],
+        "pair_blacklist": [
+            "BNB/.*"
+        ]
+    },
+
+    "pairlists": [{
+            "method": "StaticPairList"
+        }],
+
+    "telegram": {
+        "enabled": true,
+        "token": "7666451380:AAFK-KF3Uxa_KRLlIX4YSa2zfJRVO3wlfnI",
+        "chat_id": "7372956557"
+    },
+    "api_server": {
+        "enabled": true,
+        "listen_ip_address": "127.0.0.1",
+        "listen_port": 8080,
+        "verbosity": "error",
+        "enable_openapi": false,
+        "jwt_secret_key": "da0037f8e4d868d8ebd65cfe7794479ebcf7fe8f08d6a2cabbfc60e84b2b9bf5",
+        "ws_token": "pyVvFejEjEqAn3CoCo5scXQUOAqb3ZPYrg",
+        "CORS_origins": [],
+        "username": "freqtrader",
+        "password": "Cheese2025."
+    },
+    "bot_name": "freqtrade",
+    "initial_state": "running",
+    "force_entry_enable": false,
+    "internals": {
+        "process_throttle_secs": 5
+    }
+}
