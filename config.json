@@ -34,16 +34,15 @@
         "order_book_top": 1
     },
     "exchange": {
-        "name": "kucoin",
-        "key": "686f227a2301b10001e776e2",
-        "secret": "9173de3b-f61f-4ae4-baa4-fb6df65b72e2",
-        "password": "Cheese2025.",
+        "name": "kraken",
+        "key": "+oY92qEXN6/se4E7W+pyymNqOiVNROavX/pXG7HpQbPpEZR16L+3sGUy",
+        "secret": "eoNTWAUdvABAhlAnqyYky/MfHMsTCsjhdMNYR24J73OYdQFUewoWnq3CuiaMoifSmJuRMboDNi12xauHDDzfHw==",
         "ccxt_config": {},
         "ccxt_async_config": {},
-        "pair_whitelist": [ "DOGE/USDT"
+        "pair_whitelist": [ "DOGE/USD"
         ],
         "pair_blacklist": [
-            "BNB/.*"
+            "USD/.*"
         ]
     },
 
