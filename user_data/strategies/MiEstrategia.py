@@ -38,7 +38,10 @@ class MiEstrategia(IStrategy):
     order_types = {
         "entry": "market",
         "exit": "limit",
-        "stoploss": "market"
+        "stoploss": "market",
+        "stoploss_on_exchange": False,
+        "force_exit": "market",
+        "force_entry": "market"
     }
 
     order_time_in_force = {
