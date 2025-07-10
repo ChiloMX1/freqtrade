@@ -39,7 +39,7 @@
         "secret": "eoNTWAUdvABAhlAnqyYky/MfHMsTCsjhdMNYR24J73OYdQFUewoWnq3CuiaMoifSmJuRMboDNi12xauHDDzfHw==",
         "ccxt_config": {},
         "ccxt_async_config": {},
-        "pair_whitelist": [ "DOGE/USD"
+        "pair_whitelist": [ "AVAX/USD"
         ],
         "pair_blacklist": [
             "USD/.*"
@@ -57,7 +57,7 @@
     },
     "api_server": {
         "enabled": true,
-        "listen_ip_address": "127.0.0.1",
+        "listen_ip_address": "0.0.0.0",
         "listen_port": 8080,
         "verbosity": "error",
         "enable_openapi": false,
