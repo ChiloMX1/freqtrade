@@ -20,6 +20,11 @@ RUN mkdir /freqtrade \
 
 WORKDIR /freqtrade
 
+# Copia datos del usuario
+COPY user_data /freqtrade/user_data
+COPY config.json /freqtrade/config.json
+
+
 # Install dependencies
 FROM base AS python-deps
 RUN  apt-get update \
