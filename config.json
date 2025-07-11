@@ -42,7 +42,12 @@
         "pair_whitelist": [ 
         "AVAX/USD", 
         "ARB/USD", 
-        "SOL/USD"
+        "SOL/USD",
+        "BTC/USD",
+        "ETH/USD",
+        "ADA/USD",
+        "ATOM/USD",
+        "XRP/USD"
         ],
         "pair_blacklist": [
             "USD/.*"
