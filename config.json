@@ -1,4 +1,4 @@
-
+ 
 {
     "$schema": "https://schema.freqtrade.io/schema.json",
     "max_open_trades": 2,
