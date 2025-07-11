@@ -60,7 +60,7 @@
 
     "telegram": {
         "enabled": true,
-        "token": "$TELEGRAM_TOKEN",
+        "token": "8177881525:AAEfZEZcKIEaHxkCdrSDYk2yDsBqpMoKPYU",
         "chat_id": "7372956557",
         "timeout": 60
     },
@@ -76,7 +76,7 @@
         "username": "freqtrader",
         "password": "Cheese2025."
     },
-    "bot_name": "CryptoshadowMx_bot",
+    "bot_name": "CryptoshadowMx_Bot",
     "initial_state": "running",
     "force_entry_enable": false,
     "internals": {
