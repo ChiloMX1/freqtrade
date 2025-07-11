@@ -9,7 +9,6 @@ import pandas_ta as ta
 from freqtrade.strategy import IStrategy, IntParameter
 from freqtrade.persistence import Trade
 from pandas import DataFrame
-from freqtrade.strategy import crossed_above, crossed_below
 from freqtrade.strategy import merge_informative_pair
 from freqtrade.strategy import stoploss_from_open
 from freqtrade.strategy import BooleanParameter, DecimalParameter
@@ -25,8 +24,11 @@ from freqtrade.strategy import (
     BooleanParameter,
 )
 
-# Si no está definido aún, importa crossed_above
-from freqtrade.strategy import crossed_above
+def crossed_above(series1, series2):
+    return (series1.shift(1) < series2.shift(1)) & (series1 > series2)
+
+def crossed_below(series1, series2):
+    return (series1.shift(1) > series2.shift(1)) & (series1 < series2)
 
 class MiEstrategia(IStrategy):
     INTERFACE_VERSION = 3
