@@ -60,7 +60,7 @@
 
     "telegram": {
         "enabled": true,
-        "token": "7517847545:AAE08LlnP0jN7j2LY1AogPIxNTVEyL1jcZ0",
+        "token": "8177881525:AAHCOnnf2JqmHoh3lrwdi_PiEyOYA2HFMWI",
         "chat_id": "7372956557",
         "timeout": 60
     },
