@@ -115,4 +115,3 @@ target/
 
 docker-compose-*.yml
 
-user_data/config.json
