@@ -9,11 +9,13 @@ import pandas_ta as ta
 from freqtrade.strategy import IStrategy, IntParameter
 from freqtrade.persistence import Trade
 from pandas import DataFrame
+from freqtrade.strategy import crossed_above, crossed_below
 from freqtrade.strategy import merge_informative_pair
 from freqtrade.strategy import stoploss_from_open
 from freqtrade.strategy import BooleanParameter, DecimalParameter
 from freqtrade.strategy import informative
 from freqtrade.strategy import timeframe_to_minutes
+from freqtrade.strategy import IntParameter
 
 from freqtrade.strategy import (
     merge_informative_pair,
