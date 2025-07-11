@@ -25,10 +25,12 @@ from freqtrade.strategy import (
 )
 
 def crossed_above(series1, series2):
-    return (series1.shift(1) < series2.shift(1)) & (series1 > series2)
-
-def crossed_below(series1, series2):
-    return (series1.shift(1) > series2.shift(1)) & (series1 < series2)
+    if not hasattr(series1, "shift"):
+        return False
+    if isinstance(series2, (int, float)):
+        return (series1.shift(1) < series2) & (series1 > series2)
+    else:
+        return (series1.shift(1) < series2.shift(1)) & (series1 > series2)
 
 class MiEstrategia(IStrategy):
     INTERFACE_VERSION = 3
