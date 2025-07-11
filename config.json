@@ -39,7 +39,10 @@
         "secret": "eoNTWAUdvABAhlAnqyYky/MfHMsTCsjhdMNYR24J73OYdQFUewoWnq3CuiaMoifSmJuRMboDNi12xauHDDzfHw==",
         "ccxt_config": {},
         "ccxt_async_config": {},
-        "pair_whitelist": [ "AVAX/USD", "ARB/USD", "SOL/USD"
+        "pair_whitelist": [ 
+        "AVAX/USD", 
+        "ARB/USD", 
+        "SOL/USD"
         ],
         "pair_blacklist": [
             "USD/.*"
