@@ -14,17 +14,17 @@ class MiEstrategia(IStrategy):
 
     # ROI y Stoploss
     minimal_roi = {
-        "40": 0.04,
-        "20": 0.05,
+        "40": 0.003,
+        "20": 0.005,
         "0": 0.065
     }
 
-    stoploss = -0.075
+    stoploss = -0.015
 
     # Trailing Stop
     trailing_stop = True
-    trailing_stop_positive = 0.03
-    trailing_stop_positive_offset = 0.055
+    trailing_stop_positive = 0.002
+    trailing_stop_positive_offset = 0.004
     trailing_only_offset_is_reached = True
 
     # Config
