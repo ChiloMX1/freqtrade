@@ -44,6 +44,11 @@ class MiEstrategia(IStrategy):
         "0": 0.065     # 6.5% fallback
     }
 
+    # Desactivar uso de parámetros heredados
+    use_exit_signal = True
+    exit_profit_only = True
+    ignore_roi_if_entry_signal = False
+
     # Stoploss ajustado a -1%
     stoploss = -0.01
 
