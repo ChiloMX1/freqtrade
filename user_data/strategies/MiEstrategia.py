@@ -67,16 +67,16 @@ class MiEstrategia(IStrategy):
 
 
     # Trailing stop activo para asegurar ganancias pequeñas
-    "trailing_stop": true,
-    "trailing_stop_positive": 0.002,
-    "trailing_stop_positive_offset": 0.004,
-    "trailing_only_offset_is_reached": true,
+    "trailing_stop": True
+    "trailing_stop_positive": 0.002 
+    "trailing_stop_positive_offset": 0.004 
+    "trailing_only_offset_is_reached": True 
     "trailing_stop_dynamic": {
-        "enabled": true,
-        "trigger_threshold": 0.004,         // 0.4%
-        "new_stop": 0.0025                  // cuando se dispare, usa este nuevo trailing
+        "enabled": True,
+        "trigger_threshold": 0.004,       
+        "new_stop": 0.0025                 
     }
-
+ 
     # Comportamiento general
     process_only_new_candles = True
     use_exit_signal = True
@@ -155,16 +155,16 @@ class MiEstrategia(IStrategy):
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-    pair = metadata['pair']
-    current_time = dataframe.index[-1]
+        pair = metadata['pair']
+        current_time = dataframe.index[-1]
 
-    # ✅ Validación de cooldown activo para el par
-    if pair in self.cooldowns:
-        cooldown_time = self.cooldowns[pair]
-        if current_time < cooldown_time:
-            # Saltar entradas si el par está en cooldown
-            dataframe.loc[:, 'enter_long'] = 0
-            return dataframe
+        # ✅ Validación de cooldown activo para el par
+        if pair in self.cooldowns:
+            cooldown_time = self.cooldowns[pair]
+            if current_time < cooldown_time:
+                # Saltar entradas si el par está en cooldown
+                dataframe.loc[:, 'enter_long'] = 0
+                return dataframe
 
     # ================================
     # CAMBIO 1: Validación de tendencia alcista con EMA 9 > EMA 21
@@ -208,10 +208,8 @@ class MiEstrategia(IStrategy):
             volumen_estable &                     # CAMBIO 3
             ema200_validacion                     # CAMBIO 5
         ),
-        'enter_long'
-    ] = 1
+        'enter_long'] = 1
 
-    return dataframe
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe.loc[
@@ -226,34 +224,26 @@ class MiEstrategia(IStrategy):
 
         def custom_exit(self, pair: str, trade: 'Trade', current_time: datetime, current_rate: float,
                 current_profit: float, **kwargs) -> Optional[str]:
-    """
-    Cierre forzado si han pasado más de 180 minutos y el profit es menor a 0.2%.
-    """
-    # CAMBIO 4: Duración máxima por trade (180 min sin superar 0.2%)
-    max_duration = timedelta(minutes=180)
-    min_profit = 0.002  # 0.2% como decimal
 
-    if (current_time - trade.open_date_utc) > max_duration and current_profit < min_profit:
-        return 'timeout_exit'
+            # CAMBIO 4: Duración máxima por trade (180 min sin superar 0.2%)
+            max_duration = timedelta(minutes=180)
+            min_profit = 0.002  # 0.2% como decimal
+
+            if (current_time - trade.open_date_utc) > max_duration and current_profit < min_profit:
+
+             return 'timeout_exit'
 
 
-    """
-    Ajustes personalizados para salidas:
-    - Paso 6: Trailing dinámico si ROI > 0.4%
-    - Paso 7: Cooldown de 45min en pares con pérdida reciente
-    """
 
 def custom_exit(self, pair: str, trade: Trade, current_time: datetime,
                 current_rate: float, current_profit: float, **kwargs) -> Optional[str]:
-    """
-    Exit logic personalizada basada en ROI dinámico.
-    """
+
 
     # ✅ Cambio aplicado según regla #6: Trailing dinámico
     if current_profit > 0.004:  # 0.4%
         self.trailing_stop_positive = 0.0025
 
     if current_profit < 0:  # Trade con pérdida
-    self.cooldowns[pair] = current_time + timedelta(minutes=45)
+        self.cooldowns[pair] = current_time + timedelta(minutes=45)
 
     return None
