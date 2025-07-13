@@ -157,6 +157,9 @@ class MiEstrategia(IStrategy):
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        dataframe = dataframe.copy()
+        dataframe.dropna(inplace=True)
+
         # ⚠️ Asegúrate de haber generado las EMAs y MACD en populate_indicators
 
         # Verificar cooldown por pérdida previa
