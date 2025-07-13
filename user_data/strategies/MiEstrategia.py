@@ -119,11 +119,12 @@ class MiEstrategia(IStrategy):
         dataframe["ema50"] = ta.EMA(dataframe["close"], length=50)
         dataframe["tema"] = ta.EMA(dataframe["close"], length=9)
 
-        macd = ta.MACD(dataframe["close"])
-        if not macd.empty and macd.shape[1] >= 3:
-            dataframe["macd"] = macd.iloc[:, 0]
-            dataframe["macdsignal"] = macd.iloc[:, 1]
-            dataframe["macdhist"] = macd.iloc[:, 2]
+        macd = ta.macd(dataframe["close"])
+        if isinstance(macd, pd.DataFrame) and not macd.empty:
+            dataframe["macd"] = macd["MACD_12_26_9"]
+            dataframe["macdsignal"] = macd["MACDs_12_26_9"]
+            dataframe["macdhist"] = macd["MACDh_12_26_9"]
+
 
         dataframe["mfi"] = ta.MFI(
             high=dataframe["high"].astype(float),
