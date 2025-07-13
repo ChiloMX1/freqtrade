@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 from freqtrade.strategy import IStrategy
-import pandas_ta as ta
-import talib.abstract as ta
+import pandas_ta as pta
+import talib.abstract as taba
 from freqtrade.strategy import IStrategy, IntParameter
 from freqtrade.persistence import Trade
 from pandas import DataFrame
@@ -119,11 +119,12 @@ class MiEstrategia(IStrategy):
         dataframe["ema50"] = ta.EMA(dataframe["close"], length=50)
         dataframe["tema"] = ta.EMA(dataframe["close"], length=9)
 
-        macd = ta.macd(dataframe["close"])
+        macd = pta.macd(dataframe["close"])
         if isinstance(macd, pd.DataFrame) and not macd.empty:
             dataframe["macd"] = macd["MACD_12_26_9"]
             dataframe["macdsignal"] = macd["MACDs_12_26_9"]
             dataframe["macdhist"] = macd["MACDh_12_26_9"]
+
 
 
         dataframe["mfi"] = ta.MFI(
