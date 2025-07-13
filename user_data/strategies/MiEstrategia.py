@@ -34,16 +34,14 @@ def crossed_above(series1, series2):
 
 class MiEstrategia(IStrategy):
     def __init__(self, config: dict) -> None:
-    super().__init__(config)
+        super().__init__(config)
 
-    # 🔁 Requerido para implementar cooldown por pérdida por par
-    self.loss_timestamps = {}  # Guarda la hora del último trade perdedor por par
+        # 🔁 Para trailing dinámico
+        self.trailing_active = False
+        self.trailing_roi = 0.004  # ROI base al iniciar trade
 
-    def __init__(self, config: dict) -> None:
-    super().__init__(config)
-    
-    # ✅ Para cooldown: registrar último trade perdedor por par
-    self.cooldowns = {}
+        # 🔁 Para cooldown por pérdida por par
+        self.loss_timestamps = {}  # Guarda el último trade perdedor por par
 
     INTERFACE_VERSION = 3
     timeframe = "5m"
