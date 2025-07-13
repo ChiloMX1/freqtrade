@@ -64,18 +64,6 @@ class MiEstrategia(IStrategy):
     # Stoploss ajustado a -1%
     stoploss = -0.01
 
-    "protections": [
-      {
-        "method": "MaxTradeDuration",
-        "stop_duration": 10800,  // 3 horas en segundos,
-        "method": "CooldownPerPair",
-        "duration": 45,
-        "stop_duration": 0,
-        "only_per_pair": true,
-        "exit_reason": "stop_loss"
-    }
-]
-      
 
 
     # Trailing stop activo para asegurar ganancias pequeñas
