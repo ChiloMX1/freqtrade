@@ -119,13 +119,13 @@ class MiEstrategia(IStrategy):
         dataframe["ema50"] = ta.EMA(dataframe["close"], length=50)
         dataframe["tema"] = ta.EMA(dataframe["close"], length=9)
 
-        macd = ta.macd(dataframe["close"])
+        macd = ta.MACD(dataframe["close"])
         if not macd.empty and macd.shape[1] >= 3:
             dataframe["macd"] = macd.iloc[:, 0]
             dataframe["macdsignal"] = macd.iloc[:, 1]
             dataframe["macdhist"] = macd.iloc[:, 2]
 
-        dataframe["mfi"] = ta.mfi(
+        dataframe["mfi"] = ta.MFI(
             high=dataframe["high"].astype(float),
             low=dataframe["low"].astype(float),
             close=dataframe["close"].astype(float),
@@ -134,7 +134,7 @@ class MiEstrategia(IStrategy):
 
         dataframe["volume_mean"] = dataframe["volume"].rolling(window=24).mean()
 
-        bbands = ta.bbands(dataframe["close"], length=20, std=2)
+        bbands = ta.BBANDS(dataframe["close"], length=20, std=2)
         if not bbands.empty:
             dataframe["bb_lowerband"] = bbands["BBL_20_2.0"]
             dataframe["bb_middleband"] = bbands["BBM_20_2.0"]
