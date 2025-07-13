@@ -115,9 +115,9 @@ class MiEstrategia(IStrategy):
         if dataframe.empty:
             return dataframe
 
-        dataframe["rsi"] = ta.rsi(dataframe["close"], length=14)
-        dataframe["ema50"] = ta.ema(dataframe["close"], length=50)
-        dataframe["tema"] = ta.tema(dataframe["close"], length=9)
+        dataframe["rsi"] = ta.RSI(dataframe["close"], length=14)
+        dataframe["ema50"] = ta.EMA(dataframe["close"], length=50)
+        dataframe["tema"] = ta.EMA(dataframe["close"], length=9)
 
         macd = ta.macd(dataframe["close"])
         if not macd.empty and macd.shape[1] >= 3:
