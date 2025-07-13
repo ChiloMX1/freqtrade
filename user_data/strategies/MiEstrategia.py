@@ -79,7 +79,7 @@ class MiEstrategia(IStrategy):
     exit_profit_only = True
     ignore_roi_if_entry_signal = False
     
-    startup_candle_count: int = 50
+    startup_candle_count: int = 210
 
     # RSI personalizado
     buy_rsi = IntParameter(10, 40, default=30, space="buy")
@@ -152,6 +152,7 @@ class MiEstrategia(IStrategy):
 
         dataframe['ema_9'] = pta.ema(dataframe, timeperiod=9)
         dataframe['ema_21'] = pta.ema(dataframe, timeperiod=21)
+        dataframe['ema_200'] = pta.ema(dataframe, timeperiod=200)
 
         return dataframe
 
