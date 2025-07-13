@@ -147,6 +147,9 @@ class MiEstrategia(IStrategy):
                 dataframe["bb_middleband"]
             )
 
+        dataframe['ema_9'] = ta.EMA(dataframe['close'], timeperiod=9)
+        dataframe['ema_21'] = ta.EMA(dataframe['close'], timeperiod=21)
+
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
