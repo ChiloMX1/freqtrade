@@ -115,9 +115,9 @@ class MiEstrategia(IStrategy):
         if dataframe.empty:
             return dataframe
 
-        dataframe["rsi"] = ta.RSI(dataframe["close"], length=14)
-        dataframe["ema50"] = ta.EMA(dataframe["close"], length=50)
-        dataframe["tema"] = ta.EMA(dataframe["close"], length=9)
+        dataframe["rsi"] = pta.rsi(dataframe["close"], length=14)
+        dataframe["ema50"] = pta.ema(dataframe["close"], length=50)
+        dataframe["tema"] = pta.ema(dataframe["close"], length=9)
 
         macd = pta.macd(dataframe["close"])
         if isinstance(macd, pd.DataFrame) and not macd.empty:
@@ -127,7 +127,7 @@ class MiEstrategia(IStrategy):
 
 
 
-        dataframe["mfi"] = ta.MFI(
+        dataframe["mfi"] = pta.mfi(
             high=dataframe["high"].astype(float),
             low=dataframe["low"].astype(float),
             close=dataframe["close"].astype(float),
@@ -136,7 +136,7 @@ class MiEstrategia(IStrategy):
 
         dataframe["volume_mean"] = dataframe["volume"].rolling(window=24).mean()
 
-        bbands = ta.BBANDS(dataframe["close"], length=20, std=2)
+        bbands = pta.bbands(dataframe["close"], length=20, std=2)
         if not bbands.empty:
             dataframe["bb_lowerband"] = bbands["BBL_20_2.0"]
             dataframe["bb_middleband"] = bbands["BBM_20_2.0"]
@@ -150,8 +150,8 @@ class MiEstrategia(IStrategy):
                 dataframe["bb_middleband"]
             )
 
-        dataframe['ema_9'] = ta.EMA(dataframe, timeperiod=9)
-        dataframe['ema_21'] = ta.EMA(dataframe, timeperiod=21)
+        dataframe['ema_9'] = pta.ema(dataframe, timeperiod=9)
+        dataframe['ema_21'] = pta.ema(dataframe, timeperiod=21)
 
         return dataframe
 
