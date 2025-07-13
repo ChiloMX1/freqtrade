@@ -6,6 +6,7 @@ import pandas as pd
 from pandas import DataFrame
 from freqtrade.strategy import IStrategy
 import pandas_ta as ta
+import talib.abstract as ta
 from freqtrade.strategy import IStrategy, IntParameter
 from freqtrade.persistence import Trade
 from pandas import DataFrame
@@ -147,8 +148,8 @@ class MiEstrategia(IStrategy):
                 dataframe["bb_middleband"]
             )
 
-        dataframe['ema_9'] = ta.EMA(dataframe['close'], timeperiod=9)
-        dataframe['ema_21'] = ta.EMA(dataframe['close'], timeperiod=21)
+        dataframe['ema_9'] = ta.EMA(dataframe, timeperiod=9)
+        dataframe['ema_21'] = ta.EMA(dataframe, timeperiod=21)
 
         return dataframe
 
