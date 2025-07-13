@@ -3,7 +3,7 @@
     "$schema": "https://schema.freqtrade.io/schema.json",
     "max_open_trades": 3,
     "stake_currency": "USD",
-    "stake_amount": 3,
+    "stake_amount": 5,
     "strategy": "MiEstrategia",
     "tradable_balance_ratio": 1.0,
     "fiat_display_currency": "USD",
@@ -41,13 +41,11 @@
         "ccxt_async_config": {},
         "pair_whitelist": [ 
         "AVAX/USD", 
-        "ARB/USD", 
-        "SOL/USD",
-        "BTC/USD",
-        "ETH/USD",
+        "ARB/USD",
         "ADA/USD",
-        "ATOM/USD",
-        "XRP/USD"
+        "XRP/USD",
+        "DOGE/USD",
+        "INJ/USD"
         ],
         "pair_blacklist": [
             "USD/.*"
