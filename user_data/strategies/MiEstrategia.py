@@ -67,7 +67,7 @@ class MiEstrategia(IStrategy):
     "protections": [
       {
         "method": "MaxTradeDuration",
-        "stop_duration": 10800  // 3 horas en segundos,
+        "stop_duration": 10800,  // 3 horas en segundos,
         "method": "CooldownPerPair",
         "duration": 45,
         "stop_duration": 0,
