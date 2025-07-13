@@ -9,6 +9,9 @@ import pandas_ta as ta
 from freqtrade.strategy import IStrategy, IntParameter
 from freqtrade.persistence import Trade
 from pandas import DataFrame
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+from functools import reduce
 from freqtrade.strategy import merge_informative_pair
 from freqtrade.strategy import stoploss_from_open
 from freqtrade.strategy import BooleanParameter, DecimalParameter
@@ -33,6 +36,16 @@ def crossed_above(series1, series2):
         return (series1.shift(1) < series2.shift(1)) & (series1 > series2)
 
 class MiEstrategia(IStrategy):
+    def __init__(self, config: dict) -> None:
+        super().__init__(config)
+
+        # 📌 Para trailing dinámico
+        self.trailing_active = False      # Activado cuando ROI > 0.004
+        self.trailing_roi = 0.004         # ROI base mínimo para activar trailing
+
+        # 📌 Cooldown por pérdida
+        self.loss_timestamps = {}  # Diccionario para guardar últimos trades negativos por par
+
     INTERFACE_VERSION = 3
     timeframe = "5m"
     can_short = False
@@ -61,9 +74,10 @@ class MiEstrategia(IStrategy):
     # Comportamiento general
     process_only_new_candles = True
     use_exit_signal = True
+    use_custom_exit = True
     exit_profit_only = True
     ignore_roi_if_entry_signal = False
-
+    
     startup_candle_count: int = 50
 
     # RSI personalizado
@@ -136,14 +150,63 @@ class MiEstrategia(IStrategy):
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        dataframe.loc[
-            (
-                (crossed_above(dataframe["rsi"], self.buy_rsi.value)) &
-                (dataframe["tema"] <= dataframe["bb_middleband"]) &
-                (dataframe["tema"] > dataframe["tema"].shift(1)) &
-                (dataframe["volume"] > 0)
-            ),
-            "enter_long"] = 1
+        # ⚠️ Asegúrate de haber generado las EMAs y MACD en populate_indicators
+
+        # Verificar cooldown por pérdida previa
+        last_loss_time = self.loss_timestamps.get(metadata['pair'])
+        if last_loss_time:
+            cooldown_minutes = 45
+            minutes_since_loss = (datetime.now(timezone.utc) - last_loss_time).total_seconds() / 60
+            if minutes_since_loss < cooldown_minutes:
+                return dataframe  # ⛔ Evita entrada si aún está en cooldown
+
+        conditions = []
+
+        # 👇 Ejemplo original (conserva lo que tú ya tenías)
+        conditions.append(dataframe['rsi'] > 50)
+        conditions.append(dataframe['volume'] > 0)
+
+        # ✅ Punto 1: Evitar entradas en tendencia bajista inmediata
+        # Confirmar EMA 9 > EMA 21
+        conditions.append(dataframe['ema_9'] > dataframe['ema_21'])
+
+        # ✅ Punto 2: Filtro de volatilidad
+        # Validar que la vela actual no tenga un spike fuera de lo normal
+        volatility = (dataframe['high'] - dataframe['low']).rolling(window=5).mean()
+        conditions.append((dataframe['high'] - dataframe['low']) < volatility)
+
+        # ✅ Punto 3: Filtro de volumen decreciente
+        # Evita entradas si el volumen viene cayendo por 3 velas consecutivas
+        conditions.append(~((dataframe['volume'] > dataframe['volume'].shift(1)) &
+                            (dataframe['volume'].shift(1) > dataframe['volume'].shift(2))))
+
+        # ✅ Punto 5: Confirmación con soporte/resistencia (EMA200)
+        # Solo entrar si el precio actual está por encima de EMA200
+        conditions.append(dataframe['close'] > dataframe['ema_200'])
+
+        # 📌 Verificar cooldown por pérdida anterior
+        row = dataframe.iloc[-1]  # ✅ Corregido: se define row antes de usarlo
+        if self.cooldown_active(metadata['pair'], metadata['datetime']):
+            dataframe.loc[row.index, 'enter_long'] = 0
+            return dataframe
+
+        # ✅ Punto 7: Cooldown por pérdidas anteriores
+        pair = metadata['pair']
+        now = datetime.utcnow()
+
+        if pair in self.cooldowns and now < self.cooldowns[pair]:
+            return dataframe
+
+        if pair in self.trade_data and self.trade_data[pair]['last_result'] == 'loss':
+            self.cooldowns[pair] = now + timedelta(minutes=45)
+
+        # 👇 Aquí se aplican las condiciones como ya estaba en tu código original
+        if conditions:
+            dataframe.loc[
+                reduce(lambda x, y: x & y, conditions),
+                'enter_long'
+            ] = 1
+
         return dataframe
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
@@ -156,3 +219,42 @@ class MiEstrategia(IStrategy):
             ),
             "exit_long"] = 1
         return dataframe
+    
+    def custom_exit(self, pair: str, trade: Trade, current_time: datetime, current_rate: float,
+                    current_profit: float, **kwargs) -> Optional[str]:
+        """
+        Exit trade si:
+        - Supera 180 minutos sin alcanzar 0.2% de ROI
+        - ROI supera 0.4% y se activa trailing dinámico
+        """
+        # Obtener duración del trade en minutos
+        duration = (current_time - trade.open_date_utc).total_seconds() / 60
+
+        # Cierre por duración sin rendimiento
+        if duration > 180 and current_profit < 0.002:
+            return "timeout_exit"
+
+        # Activar trailing dinámico si ROI supera 0.4%
+        if current_profit > 0.004:
+            self.trailing_active = True
+            self.trailing_roi = 0.0025  # Subir trailing para asegurar ganancia
+
+        # Registrar pérdida si el trade cerró en negativo
+        if current_profit < 0:
+            self.loss_timestamps[pair] = current_time
+
+        return None  # No salir si no se cumple ninguna condición
+    
+    def cooldown_active(self, pair: str, current_time: datetime) -> bool:
+        """
+        Retorna True si el par está dentro del periodo de cooldown de 45 minutos.
+        """
+        last_loss_time = self.loss_timestamps.get(pair)
+        if last_loss_time:
+            cooldown_duration = timedelta(minutes=45)
+            if current_time - last_loss_time < cooldown_duration:
+                return True
+        return False
+    
+
+        
