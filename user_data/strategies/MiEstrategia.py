@@ -157,6 +157,8 @@ class MiEstrategia(IStrategy):
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        if dataframe.empty or not dataframe.index.is_monotonic_increasing:
+            return dataframe
         dataframe = dataframe.copy()
         dataframe.dropna(inplace=True)
 
@@ -223,6 +225,9 @@ class MiEstrategia(IStrategy):
         return dataframe
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        if dataframe.empty or not dataframe.index.is_monotonic_increasing:
+            return dataframe
+        
         dataframe.loc[
             (
                 (crossed_above(dataframe["rsi"], self.sell_rsi.value)) &
