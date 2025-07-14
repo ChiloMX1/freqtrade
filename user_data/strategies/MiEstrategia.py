@@ -15,7 +15,7 @@ from functools import reduce
 from freqtrade.strategy import IntParameter, CategoricalParameter, DecimalParameter
 import logging
 
-class MiEstrategiaLive(IStrategy):
+class MiEstrategia(IStrategy):
     """
     Estrategia optimizada para trading en vivo con:
     - Manejo robusto de errores
