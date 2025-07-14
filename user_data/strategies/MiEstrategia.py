@@ -46,7 +46,7 @@ class MiEstrategia(IStrategy):
 
         # 📌 Cooldown por pérdida
         self.loss_timestamps = {}  # Diccionario para guardar últimos trades negativos por par
-
+        self.cooldowns = {}
     INTERFACE_VERSION = 3
     timeframe = "5m"
     can_short = False
@@ -159,87 +159,69 @@ class MiEstrategia(IStrategy):
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         if dataframe.empty or not dataframe.index.is_monotonic_increasing:
             return dataframe
-        dataframe = dataframe.copy()
-        dataframe.dropna(inplace=True)
 
-        # ⚠️ Asegúrate de haber generado las EMAs y MACD en populate_indicators
-
-        # Verificar cooldown por pérdida previa
-        last_loss_time = self.loss_timestamps.get(metadata['pair'])
-        if last_loss_time:
-            cooldown_minutes = 45
-            minutes_since_loss = (datetime.now(timezone.utc) - last_loss_time).total_seconds() / 60
-            if minutes_since_loss < cooldown_minutes:
-                return dataframe  # ⛔ Evita entrada si aún está en cooldown
-
-        conditions = []
-
-        # 👇 Ejemplo original (conserva lo que tú ya tenías)
-        conditions.append(dataframe['rsi'] > 50)
-        conditions.append(dataframe['volume'] > 0)
-
-        # ✅ Punto 1: Evitar entradas en tendencia bajista inmediata
-        # Confirmar EMA 9 > EMA 21
-        conditions.append(dataframe['ema_9'] > dataframe['ema_21'])
-
-        # ✅ Punto 2: Filtro de volatilidad
-        # Validar que la vela actual no tenga un spike fuera de lo normal
-        volatility = (dataframe['high'] - dataframe['low']).rolling(window=5).mean()
-        conditions.append((dataframe['high'] - dataframe['low']) < volatility)
-
-        # ✅ Punto 3: Filtro de volumen decreciente
-        # Evita entradas si el volumen viene cayendo por 3 velas consecutivas
-        conditions.append(~((dataframe['volume'] > dataframe['volume'].shift(1)) &
-                            (dataframe['volume'].shift(1) > dataframe['volume'].shift(2))))
-
-        # ✅ Punto 5: Confirmación con soporte/resistencia (EMA200)
-        # Solo entrar si el precio actual está por encima de EMA200
-        conditions.append(dataframe['close'] > dataframe['ema_200'])
-
-        # 📌 Verificar cooldown por pérdida anterior
-        if dataframe.empty or not dataframe.index.is_monotonic_increasing:
-            return dataframe
-
-        if self.cooldown_active(metadata['pair'], metadata['datetime']):
-            return dataframe
-
-
-        # ✅ Punto 7: Cooldown por pérdidas anteriores
         pair = metadata['pair']
         now = datetime.utcnow()
 
+        # Bloque 1: Cooldown por tiempo activo
         if pair in self.cooldowns and now < self.cooldowns[pair]:
             return dataframe
 
-        if pair in self.trade_data and self.trade_data[pair]['last_result'] == 'loss':
-            self.cooldowns[pair] = now + timedelta(minutes=45)
+        # Bloque 2: Cooldown reciente por pérdida
+        last_loss_time = self.loss_timestamps.get(pair)
+        if last_loss_time:
+            cooldown_minutes = 45
+            minutes_since_loss = (now - last_loss_time).total_seconds() / 60
+            if minutes_since_loss < cooldown_minutes:
+                self.cooldowns[pair] = now + timedelta(minutes=45)
+                return dataframe
 
-        # 👇 Aquí se aplican las condiciones como ya estaba en tu código original
+        dataframe = dataframe.copy()
+        dataframe.dropna(inplace=True)
+        dataframe['enter_long'] = 0  # Inicialización segura
+
+        conditions = []
+        conditions.append(dataframe['rsi'] > 50)
+        conditions.append(dataframe['volume'] > 0)
+        conditions.append(dataframe['ema_9'] > dataframe['ema_21'])
+
+        volatility = (dataframe['high'] - dataframe['low']).rolling(window=5).mean()
+        conditions.append((dataframe['high'] - dataframe['low']) < volatility)
+
+        conditions.append(~((dataframe['volume'] > dataframe['volume'].shift(1)) &
+                            (dataframe['volume'].shift(1) > dataframe['volume'].shift(2))))
+
+        conditions.append(dataframe['close'] > dataframe['ema_200'])
+
         if conditions and not dataframe.empty and dataframe.index.is_monotonic_increasing:
             try:
                 condition_mask = reduce(lambda x, y: x & y, conditions)
                 if not condition_mask.empty and condition_mask.any():
                     dataframe.loc[condition_mask, 'enter_long'] = 1
             except Exception as e:
-                # Log opcional si quieres rastrear errores raros
                 self.logger.warning(f"Error aplicando condiciones en {metadata['pair']}: {str(e)}")
 
         return dataframe
-
+    
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         if dataframe.empty or not dataframe.index.is_monotonic_increasing:
             return dataframe
-        
-        dataframe.loc[
-            (
-                (crossed_above(dataframe["rsi"], self.sell_rsi.value)) &
-                (dataframe["tema"] > dataframe["bb_middleband"]) &
-                (dataframe["tema"] < dataframe["tema"].shift(1)) &
-                (dataframe["volume"] > 0)
-            ),
-            "exit_long"] = 1
+        # Pre-inicializar columna de señal de salida
+        dataframe['exit_long'] = 0  # por defecto, no salir
+        # Construir máscara booleana para la condición de salida
+        exit_mask = (
+            (crossed_above(dataframe["rsi"], self.sell_rsi.value)) &
+            (dataframe["tema"] > dataframe["bb_middleband"]) &
+            (dataframe["tema"] < dataframe["tema"].shift(1)) &
+            (dataframe["volume"] > 0)
+        )
+        # Asignar señal de salida solo donde la condición es True
+        if not exit_mask.empty and exit_mask.any():
+            dataframe.loc[exit_mask, "exit_long"] = 1
         return dataframe
-    
+
+
+
     def custom_exit(self, pair: str, trade: Trade, current_time: datetime, current_rate: float,
                     current_profit: float, **kwargs) -> Optional[str]:
         """
