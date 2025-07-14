@@ -215,11 +215,10 @@ class MiEstrategia(IStrategy):
             self.cooldowns[pair] = now + timedelta(minutes=45)
 
         # 👇 Aquí se aplican las condiciones como ya estaba en tu código original
-        if conditions:
-            dataframe.loc[
-                reduce(lambda x, y: x & y, conditions),
-                'enter_long'
-            ] = 1
+        if conditions and not dataframe.empty:
+            condition_mask = reduce(lambda x, y: x & y, conditions)
+            if not condition_mask.empty and condition_mask.any():
+                dataframe.loc[condition_mask, 'enter_long'] = 1
 
         return dataframe
 
