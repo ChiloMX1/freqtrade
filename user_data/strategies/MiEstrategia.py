@@ -197,10 +197,6 @@ class MiEstrategia(IStrategy):
         conditions.append(dataframe['close'] > dataframe['ema_200'])
 
         # 📌 Verificar cooldown por pérdida anterior
-        if dataframe.empty:
-            return dataframe
-
-        row = dataframe.iloc[-1]
         if dataframe.empty or not dataframe.index.is_monotonic_increasing:
             return dataframe
 
