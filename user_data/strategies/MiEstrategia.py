@@ -215,10 +215,14 @@ class MiEstrategia(IStrategy):
             self.cooldowns[pair] = now + timedelta(minutes=45)
 
         # 👇 Aquí se aplican las condiciones como ya estaba en tu código original
-        if conditions and not dataframe.empty:
-            condition_mask = reduce(lambda x, y: x & y, conditions)
-            if not condition_mask.empty and condition_mask.any():
-                dataframe.loc[condition_mask, 'enter_long'] = 1
+        if conditions and not dataframe.empty and dataframe.index.is_monotonic_increasing:
+            try:
+                condition_mask = reduce(lambda x, y: x & y, conditions)
+                if not condition_mask.empty and condition_mask.any():
+                    dataframe.loc[condition_mask, 'enter_long'] = 1
+            except Exception as e:
+                # Log opcional si quieres rastrear errores raros
+                self.logger.warning(f"Error aplicando condiciones en {metadata['pair']}: {str(e)}")
 
         return dataframe
 
