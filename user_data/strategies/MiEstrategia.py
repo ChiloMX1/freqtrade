@@ -5,14 +5,10 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 from freqtrade.strategy import IStrategy
-import pandas_ta as pta
-import talib.abstract as taba
+import pandas_ta as ta
 from freqtrade.strategy import IStrategy, IntParameter
 from freqtrade.persistence import Trade
 from pandas import DataFrame
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-from functools import reduce
 from freqtrade.strategy import merge_informative_pair
 from freqtrade.strategy import stoploss_from_open
 from freqtrade.strategy import BooleanParameter, DecimalParameter
@@ -37,16 +33,6 @@ def crossed_above(series1, series2):
         return (series1.shift(1) < series2.shift(1)) & (series1 > series2)
 
 class MiEstrategia(IStrategy):
-    def __init__(self, config: dict) -> None:
-        super().__init__(config)
-
-        # 📌 Para trailing dinámico
-        self.trailing_active = False      # Activado cuando ROI > 0.004
-        self.trailing_roi = 0.004         # ROI base mínimo para activar trailing
-
-        # 📌 Cooldown por pérdida
-        self.loss_timestamps = {}  # Diccionario para guardar últimos trades negativos por par
-        self.cooldowns = {}
     INTERFACE_VERSION = 3
     timeframe = "5m"
     can_short = False
@@ -75,11 +61,10 @@ class MiEstrategia(IStrategy):
     # Comportamiento general
     process_only_new_candles = True
     use_exit_signal = True
-    use_custom_exit = True
     exit_profit_only = True
     ignore_roi_if_entry_signal = False
-    
-    startup_candle_count: int = 210
+
+    startup_candle_count: int = 50
 
     # RSI personalizado
     buy_rsi = IntParameter(10, 40, default=30, space="buy")
@@ -115,19 +100,17 @@ class MiEstrategia(IStrategy):
         if dataframe.empty:
             return dataframe
 
-        dataframe["rsi"] = pta.rsi(dataframe["close"], length=14)
-        dataframe["ema50"] = pta.ema(dataframe["close"], length=50)
-        dataframe["tema"] = pta.ema(dataframe["close"], length=9)
+        dataframe["rsi"] = ta.rsi(dataframe["close"], length=14)
+        dataframe["ema50"] = ta.ema(dataframe["close"], length=50)
+        dataframe["tema"] = ta.tema(dataframe["close"], length=9)
 
-        macd = pta.macd(dataframe["close"])
-        if isinstance(macd, pd.DataFrame) and not macd.empty:
-            dataframe["macd"] = macd["MACD_12_26_9"]
-            dataframe["macdsignal"] = macd["MACDs_12_26_9"]
-            dataframe["macdhist"] = macd["MACDh_12_26_9"]
+        macd = ta.macd(dataframe["close"])
+        if not macd.empty and macd.shape[1] >= 3:
+            dataframe["macd"] = macd.iloc[:, 0]
+            dataframe["macdsignal"] = macd.iloc[:, 1]
+            dataframe["macdhist"] = macd.iloc[:, 2]
 
-
-
-        dataframe["mfi"] = pta.mfi(
+        dataframe["mfi"] = ta.mfi(
             high=dataframe["high"].astype(float),
             low=dataframe["low"].astype(float),
             close=dataframe["close"].astype(float),
@@ -136,7 +119,7 @@ class MiEstrategia(IStrategy):
 
         dataframe["volume_mean"] = dataframe["volume"].rolling(window=24).mean()
 
-        bbands = pta.bbands(dataframe["close"], length=20, std=2)
+        bbands = ta.bbands(dataframe["close"], length=20, std=2)
         if not bbands.empty:
             dataframe["bb_lowerband"] = bbands["BBL_20_2.0"]
             dataframe["bb_middleband"] = bbands["BBM_20_2.0"]
@@ -150,124 +133,26 @@ class MiEstrategia(IStrategy):
                 dataframe["bb_middleband"]
             )
 
-        dataframe['ema_9'] = pta.ema(dataframe, timeperiod=9)
-        dataframe['ema_21'] = pta.ema(dataframe, timeperiod=21)
-        dataframe['ema_200'] = pta.ema(dataframe, timeperiod=200)
-
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        if dataframe.empty or not dataframe.index.is_monotonic_increasing:
-            return dataframe
-
-        pair = metadata['pair']
-        now = datetime.utcnow()
-
-        # Bloque 1: Cooldown por tiempo activo
-        if pair in self.cooldowns and now < self.cooldowns[pair]:
-            return dataframe
-
-        # Bloque 2: Cooldown reciente por pérdida
-        last_loss_time = self.loss_timestamps.get(pair)
-        if last_loss_time:
-            cooldown_minutes = 45
-            minutes_since_loss = (now - last_loss_time).total_seconds() / 60
-            if minutes_since_loss < cooldown_minutes:
-                self.cooldowns[pair] = now + timedelta(minutes=45)
-                return dataframe
-
-        dataframe = dataframe.copy()
-        dataframe.dropna(inplace=True)
-        if dataframe.empty or not dataframe.index.is_monotonic_increasing:
-            return dataframe
-
-        if 'enter_long' not in dataframe.columns:
-            dataframe['enter_long'] = pd.Series(index=dataframe.index, dtype=int, data=0)
-
-        conditions = []
-        conditions.append(dataframe['rsi'] > 50)
-        conditions.append(dataframe['volume'] > 0)
-        conditions.append(dataframe['ema_9'] > dataframe['ema_21'])
-
-        volatility = (dataframe['high'] - dataframe['low']).rolling(window=5).mean()
-        conditions.append((dataframe['high'] - dataframe['low']) < volatility)
-
-        conditions.append(~((dataframe['volume'] > dataframe['volume'].shift(1)) &
-                            (dataframe['volume'].shift(1) > dataframe['volume'].shift(2))))
-
-        conditions.append(dataframe['close'] > dataframe['ema_200'])
-
-        if conditions and not dataframe.empty and dataframe.index.is_monotonic_increasing:
-            try:
-                condition_mask = reduce(lambda x, y: x & y, conditions)
-                if not condition_mask.empty and condition_mask.any():
-                    dataframe.loc[condition_mask, 'enter_long'] = 1
-            except Exception as e:
-                self.logger.warning(f"Error aplicando condiciones en {metadata['pair']}: {str(e)}")
-
+        dataframe.loc[
+            (
+                (crossed_above(dataframe["rsi"], self.buy_rsi.value)) &
+                (dataframe["tema"] <= dataframe["bb_middleband"]) &
+                (dataframe["tema"] > dataframe["tema"].shift(1)) &
+                (dataframe["volume"] > 0)
+            ),
+            "enter_long"] = 1
         return dataframe
-    
+
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        if dataframe.empty or not dataframe.index.is_monotonic_increasing:
-            return dataframe
-
-        # Pre-inicializar la columna de salida de forma segura
-        if 'exit_long' not in dataframe.columns:
-            dataframe['exit_long'] = pd.Series(index=dataframe.index, dtype=int, data=0)
-
-        try:
-            exit_mask = (
+        dataframe.loc[
+            (
                 (crossed_above(dataframe["rsi"], self.sell_rsi.value)) &
                 (dataframe["tema"] > dataframe["bb_middleband"]) &
                 (dataframe["tema"] < dataframe["tema"].shift(1)) &
                 (dataframe["volume"] > 0)
-            )
-
-            if not exit_mask.empty and exit_mask.any():
-                dataframe.loc[exit_mask, "exit_long"] = 1
-
-        except Exception as e:
-            self.logger.warning(f"Error en populate_exit_trend para {metadata['pair']}: {str(e)}")
-
+            ),
+            "exit_long"] = 1
         return dataframe
-
-
-
-    def custom_exit(self, pair: str, trade: Trade, current_time: datetime, current_rate: float,
-                    current_profit: float, **kwargs) -> Optional[str]:
-        """
-        Exit trade si:
-        - Supera 180 minutos sin alcanzar 0.2% de ROI
-        - ROI supera 0.4% y se activa trailing dinámico
-        """
-        # Obtener duración del trade en minutos
-        duration = (current_time - trade.open_date_utc).total_seconds() / 60
-
-        # Cierre por duración sin rendimiento
-        if duration > 180 and current_profit < 0.002:
-            return "timeout_exit"
-
-        # Activar trailing dinámico si ROI supera 0.4%
-        if current_profit > 0.004:
-            self.trailing_active = True
-            self.trailing_roi = 0.0025  # Subir trailing para asegurar ganancia
-
-        # Registrar pérdida si el trade cerró en negativo
-        if current_profit < 0:
-            self.loss_timestamps[pair] = current_time
-
-        return None  # No salir si no se cumple ninguna condición
-    
-    def cooldown_active(self, pair: str, current_time: datetime) -> bool:
-        """
-        Retorna True si el par está dentro del periodo de cooldown de 45 minutos.
-        """
-        last_loss_time = self.loss_timestamps.get(pair)
-        if last_loss_time:
-            cooldown_duration = timedelta(minutes=45)
-            if current_time - last_loss_time < cooldown_duration:
-                return True
-        return False
-    
-
-        
