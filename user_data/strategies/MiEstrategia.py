@@ -220,7 +220,7 @@ class MiEstrategia(IStrategy):
             if not condition_mask.empty and condition_mask.any():
                 dataframe.loc[condition_mask, 'enter_long'] = 1
 
-        return dataframe
+         return dataframe
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         if dataframe.empty or not dataframe.index.is_monotonic_increasing:
