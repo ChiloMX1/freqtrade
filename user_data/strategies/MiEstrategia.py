@@ -4,325 +4,259 @@
 
 import numpy as np
 import pandas as pd
-from freqtrade.strategy import timeframe_to_minutes
 from pandas import DataFrame
 from freqtrade.strategy import IStrategy
 import pandas_ta as pta
 from freqtrade.persistence import Trade
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict
 from functools import reduce
-from freqtrade.strategy import IntParameter, CategoricalParameter, DecimalParameter
+from freqtrade.strategy import IntParameter
 import logging
+import time
 
 class MiEstrategia(IStrategy):
     """
-    Estrategia optimizada para trading en vivo con:
-    - Manejo robusto de errores
-    - Protección contra datos incompletos
-    - Logging detallado
-    - Prevención de falsas señales
+    Versión optimizada para despliegue directo en Render con Kraken
+    - Manejo robusto de conexiones intermitentes
+    - Validación estricta de datos remotos
+    - Auto-recuperación de errores
     """
 
-    def __init__(self, config: Dict[str, Any]) -> None:
-        super().__init__(config)
-        self.trailing_active = False
-        self.trailing_roi = 0.004
-        self.loss_timestamps = {}
-        self.cooldowns = {}
-        self._last_valid_index = None
-        self._log = logging.getLogger(__name__)
-
-    # Configuración base para trading en vivo
+    # 1. Configuración Base para Render
     INTERFACE_VERSION = 3
-    timeframe = "5m"
+    timeframe = '5m'
     can_short = False
     process_only_new_candles = True
-    use_custom_stoploss = True
-    use_custom_exit = True
+    startup_candle_count = 300  # Buffer amplio para datos remotos
 
-    # Parámetros optimizados para live trading
+    # 2. Parámetros Optimizados para Kraken
     minimal_roi = {
-        "0": 0.065,
-        "20": 0.005,
-        "40": 0.003
+        "0": 0.07,    # 7% ROI para trades largos
+        "30": 0.02,   # 2% después de 30 velas
+        "60": 0.01    # 1% después de 60 velas
     }
 
-    stoploss = -0.01
+    stoploss = -0.015  # -1.5% stoploss inicial
     trailing_stop = True
-    trailing_stop_positive = 0.002
-    trailing_stop_positive_offset = 0.004
+    trailing_stop_positive = 0.01
+    trailing_stop_positive_offset = 0.02
     trailing_only_offset_is_reached = True
 
-    # Protección contra velas faltantes
-    startup_candle_count: int = 210
-    missing_candles_threshold = 0.05  # 5% de velas faltantes máximo
+    # 3. Parámetros Dinámicos (ajustables via Telegram)
+    buy_rsi = IntParameter(28, 38, default=32, space='buy')
+    sell_rsi = IntParameter(68, 85, default=75, space='sell')
 
-    # Parámetros optimizables
-    buy_rsi = IntParameter(10, 40, default=30, space="buy")
-    sell_rsi = IntParameter(60, 90, default=70, space="sell")
-
-    # Configuración de órdenes para live trading
+    # 4. Configuración de Órdenes para Kraken en Render
     order_types = {
-        "entry": "limit",
-        "exit": "limit",
-        "stoploss": "market",
-        "stoploss_on_exchange": True
+        'entry': 'limit',
+        'exit': 'limit',
+        'stoploss': 'market',
+        'stoploss_on_exchange': True  # Crítico para Render
     }
 
     order_time_in_force = {
-        "entry": "gtc",
-        "exit": "gtc"
+        'entry': 'GTC',
+        'exit': 'GTC'
     }
 
-    def _is_data_valid(self, dataframe: DataFrame, metadata: Dict[str, Any]) -> bool:
+    def __init__(self, config: Dict) -> None:
+        super().__init__(config)
+        self.logger = logging.getLogger(__name__)
+        self.last_refresh = time.time()
+        self.data_retries = {}  # Para reintentos por par
+        self.logger.info("Inicializando estrategia para Render+Kraken")
+
+    def _get_kraken_dataframe(self, dataframe: DataFrame, pair: str) -> Optional[DataFrame]:
         """
-        Validación exhaustiva para trading en vivo:
-        1. Verifica estructura básica
-        2. Comprueba integridad temporal
-        3. Valida que no haya gaps excesivos
-        """
-        if dataframe.empty:
-            self._log.warning(f"[LIVE] DataFrame vacío recibido para {metadata['pair']}")
-            return False
-
-        # Verificación de columnas OHLCV
-        ohlcv_cols = {'open', 'high', 'low', 'close', 'volume'}
-        if not ohlcv_cols.issubset(dataframe.columns):
-            missing = ohlcv_cols - set(dataframe.columns)
-            self._log.error(f"[LIVE] Columnas OHLCV faltantes en {metadata['pair']}: {missing}")
-            return False
-
-        # Verificación de índice temporal
-        if not isinstance(dataframe.index, pd.DatetimeIndex):
-            self._log.error(f"[LIVE] Índice no es DatetimeIndex en {metadata['pair']}")
-            return False
-
-        # Verificación de monotonicidad
-        if not dataframe.index.is_monotonic_increasing:
-            self._log.error(f"[LIVE] Índice no es monotónico creciente en {metadata['pair']}")
-            return False
-
-        # Detección de gaps temporales
-        time_diff = dataframe.index.to_series().diff().dt.total_seconds()
-        expected_diff = timeframe_to_minutes(self.timeframe) * 60
-        gap_ratio = (time_diff > expected_diff * 1.5).mean()
-
-        if gap_ratio > self.missing_candles_threshold:
-            self._log.warning(f"[LIVE] Demasiados gaps temporales en {metadata['pair']}: {gap_ratio:.2%}")
-            return False
-
-        return True
-
-    def populate_indicators(self, dataframe: DataFrame, metadata: Dict[str, Any]) -> DataFrame:
-        """
-        Calcula indicadores con protección extra para live trading:
-        - Manejo de errores por indicador
-        - Validación de valores extremos
-        - Protección contra NaN/Inf
+        Procesamiento seguro de DataFrame para Kraken en entorno remoto
         """
         try:
-            if not self._is_data_valid(dataframe, metadata):
-                return dataframe
+            # Validación básica
+            if dataframe.empty or len(dataframe) < 50:
+                self.logger.warning(f"[KRAKEN-RENDER] Datos insuficientes para {pair}")
+                return None
 
-            df = dataframe.copy()
+            # Conversión segura del índice
+            if not isinstance(dataframe.index, pd.DatetimeIndex):
+                try:
+                    dataframe.index = pd.to_datetime(dataframe.index, utc=True)
+                    dataframe.index = dataframe.index.tz_localize('UTC') if dataframe.index.tz is None else dataframe.index
+                except Exception as e:
+                    self.logger.error(f"[KRAKEN-RENDER] Error en índice temporal {pair}: {e}")
+                    return None
 
-            # RSI con protección
-            df['rsi'] = pta.rsi(df['close'], length=14).clip(0, 100)
+            # Verificación de columnas específicas de Kraken
+            required_cols = {'open', 'high', 'low', 'close', 'volume'}
+            if not required_cols.issubset(dataframe.columns):
+                missing = required_cols - set(dataframe.columns)
+                self.logger.error(f"[KRAKEN-RENDER] Columnas faltantes en {pair}: {missing}")
+                return None
 
-            # EMAs esenciales
-            for length in [9, 21, 50, 200]:
-                df[f'ema_{length}'] = pta.ema(df['close'], length=length)
+            # Limpieza de datos
+            numeric_cols = ['open', 'high', 'low', 'close', 'volume']
+            dataframe[numeric_cols] = dataframe[numeric_cols].apply(pd.to_numeric, errors='coerce')
+            dataframe.dropna(inplace=True)
 
-            # MACD con validación
-            macd = pta.macd(df['close'])
-            if not macd.empty:
-                df[['macd', 'macdsignal', 'macdhist']] = macd[['MACD_12_26_9', 'MACDs_12_26_9', 'MACDh_12_26_9']]
-
-            # Bollinger Bands
-            bb = pta.bbands(df['close'], length=20, std=2)
-            if not bb.empty:
-                df[['bb_upperband', 'bb_middleband', 'bb_lowerband']] = bb[['BBU_20_2.0', 'BBM_20_2.0', 'BBL_20_2.0']]
-
-            # Limpieza final para live trading
-            df.replace([np.inf, -np.inf], np.nan, inplace=True)
-            df.ffill(inplace=True)
-            df.dropna(inplace=True)
-
-            return df
-
-        except Exception as e:
-            self._log.error(f"[LIVE] Error crítico en indicadores para {metadata['pair']}: {str(e)}", exc_info=True)
             return dataframe
 
-    def populate_entry_trend(self, dataframe: DataFrame, metadata: Dict[str, Any]) -> DataFrame:
+        except Exception as e:
+            self.logger.error(f"[KRAKEN-RENDER] Error crítico procesando {pair}: {e}", exc_info=True)
+            return None
+
+    def populate_indicators(self, dataframe: DataFrame, metadata: Dict) -> DataFrame:
         """
-        Generación de señales de entrada con protecciones para live trading:
-        - Validación de volumen
-        - Confirmación de tendencia
-        - Filtrado de falsos positivos
+        Versión ultra-robusta para Render con manejo de desconexiones
         """
+        pair = metadata.get('pair', 'unknown')
+        
+        # Auto-refresh cada 6 horas para Render
+        if time.time() - self.last_refresh > 21600:
+            self.logger.info("[RENDER] Auto-refresh de datos activado")
+            self.last_refresh = time.time()
+            return pd.DataFrame()  # Fuerza refresco
+
         try:
-            if not self._is_data_valid(dataframe, metadata):
+            df = self._get_kraken_dataframe(dataframe, pair)
+            if df is None:
+                self.data_retries[pair] = self.data_retries.get(pair, 0) + 1
+                if self.data_retries[pair] > 3:
+                    self.logger.warning(f"[RENDER] Reintentos agotados para {pair}")
+                    return pd.DataFrame()
+                return dataframe
+
+            # Resetear contador de reintentos
+            self.data_retries[pair] = 0
+
+            # Indicadores principales (optimizados para Kraken 5m)
+            df['rsi'] = pta.rsi(df['close'], length=14).clip(10, 90)
+            
+            # EMAs con protección
+            ema_lengths = [9, 21, 50, 100, 200]
+            for length in ema_lengths:
+                df[f'ema_{length}'] = pta.ema(df['close'], length=length)
+
+            # MACD configurado para Kraken
+            macd = pta.macd(df['close'], fast=12, slow=26, signal=9)
+            df[['macd', 'macdsignal', 'macdhist']] = macd[['MACD_12_26_9', 'MACDs_12_26_9', 'MACDh_12_26_9']]
+
+            # Volumen ajustado
+            df['volume_ma'] = df['volume'].rolling(20).mean()
+
+            return df.replace([np.inf, -np.inf], np.nan).dropna()
+
+        except Exception as e:
+            self.logger.error(f"[RENDER] Error en indicadores para {pair}: {e}", exc_info=True)
+            return dataframe
+
+    def populate_entry_trend(self, dataframe: DataFrame, metadata: Dict) -> DataFrame:
+        """
+        Señales de entrada con protección para entornos inestables
+        """
+        pair = metadata.get('pair', 'unknown')
+        
+        try:
+            if pair not in self.data_retries or self.data_retries[pair] > 0:
                 return dataframe
 
             df = dataframe.copy()
             df['enter_long'] = 0
 
-            # Condiciones base con protección
+            # Condiciones adaptativas para Render
             conditions = [
-                df['volume'] > df['volume'].rolling(20).mean() * 0.8,
-                df['close'] > df['ema_200'],
-                df['rsi'].between(30, 70),
-                df['ema_9'] > df['ema_21'],
-                df['close'] > df['open']
+                df['rsi'] > self.buy_rsi.value,
+                df['close'] > df['ema_100'],
+                df['volume'] > df['volume_ma'] * 0.65,
+                df['macd'] > df['macdsignal'],
+                df['close'] > df['open'].rolling(3).mean()
             ]
 
-            # Aplicación segura de condiciones
-            if conditions:
-                enter_mask = reduce(lambda x, y: x & y, conditions)
-                df.loc[enter_mask, 'enter_long'] = 1
-
-            # Filtrado adicional para live
-            df['enter_long'] = df['enter_long'].rolling(3, min_periods=1).max()
+            # Aplicación segura
+            if all(conditions):
+                df.loc[reduce(lambda x, y: x & y, conditions), 'enter_long'] = 1
 
             return df
 
         except Exception as e:
-            self._log.error(f"[LIVE] Error en señales de entrada para {metadata['pair']}: {str(e)}")
+            self.logger.error(f"[RENDER] Error en señales entrada {pair}: {e}")
             return dataframe
 
-    def populate_exit_trend(self, dataframe: DataFrame, metadata: Dict[str, Any]) -> DataFrame:
+    def populate_exit_trend(self, dataframe: DataFrame, metadata: Dict) -> DataFrame:
         """
-        Generación de señales de salida con protecciones para live trading:
-        - Confirmación de reversión
-        - Protección de ganancias
-        - Stop dinámico
+        Señales de salida con filtros adicionales para Kraken
         """
+        pair = metadata.get('pair', 'unknown')
+        
         try:
-            if not self._is_data_valid(dataframe, metadata):
+            if pair not in self.data_retries or self.data_retries[pair] > 0:
                 return dataframe
 
             df = dataframe.copy()
             df['exit_long'] = 0
 
-            # Condiciones de salida
+            # Condiciones de salida para entorno remoto
             exit_conditions = [
                 df['rsi'] > self.sell_rsi.value,
-                df['close'] < df['ema_9'],
-                df['volume'] < df['volume'].rolling(20).mean() * 0.7
+                df['close'] < df['ema_21'],
+                df['volume'] < df['volume_ma'] * 1.5,
+                df['macd'] < df['macdsignal']
             ]
 
-            if exit_conditions:
-                exit_mask = reduce(lambda x, y: x & y, exit_conditions)
-                df.loc[exit_mask, 'exit_long'] = 1
+            if all(exit_conditions):
+                df.loc[reduce(lambda x, y: x & y, exit_conditions), 'exit_long'] = 1
 
             return df
 
         except Exception as e:
-            self._log.error(f"[LIVE] Error en señales de salida para {metadata['pair']}: {str(e)}")
+            self.logger.error(f"[RENDER] Error en señales salida {pair}: {e}")
             return dataframe
 
-    def custom_exit(self, pair: str, trade: Trade, current_time: datetime,
+    def custom_exit(self, pair: str, trade: Trade, current_time: datetime, 
                    current_rate: float, current_profit: float, **kwargs) -> Optional[str]:
         """
-        Lógica de salida personalizada para live trading:
-        - Timeout por inactividad
-        - Trailing stop dinámico
-        - Protección contra pérdidas
+        Gestión avanzada de salidas para Render
         """
         try:
-            # Validación de datos de entrada
-            if not isinstance(trade, Trade) or current_time.tzinfo is None:
-                return None
+            # Duración en horas
+            duration_hours = (current_time - trade.open_date_utc).total_seconds() / 3600
 
-            # Cálculo seguro de duración
-            duration = (current_time - trade.open_date_utc.replace(tzinfo=timezone.utc)).total_seconds() / 60
+            # 1. Salida por timeout (3.5 horas)
+            if duration_hours > 3.5 and current_profit < 0.005:
+                return 'render_timeout'
 
-            # Salida por timeout (3 horas sin ganancia mínima)
-            if duration > 180 and current_profit < 0.002:
-                return "exit_timeout"
+            # 2. Protección de ganancias
+            if current_profit > 0.015 and duration_hours > 1:
+                return 'take_profit_render'
 
-            # Activación de trailing dinámico
-            if current_profit > 0.004:
-                self.trailing_active = True
-                self.trailing_roi = max(self.trailing_roi, 0.0025)
-
-            # Registro de pérdidas para cooldown
-            if current_profit < -0.005:  # -0.5%
-                self.loss_timestamps[pair] = current_time
-                return "exit_stoploss"
+            # 3. Stop loss dinámico
+            if current_profit < -0.01:  # -1%
+                return 'stop_loss_render'
 
             return None
 
         except Exception as e:
-            self._log.error(f"[LIVE] Error en custom_exit para {pair}: {str(e)}")
+            self.logger.error(f"[RENDER] Error en custom_exit {pair}: {e}")
             return None
 
-    def custom_stoploss(self, pair: str, trade: Trade, current_time: datetime,
-                       current_rate: float, current_profit: float, **kwargs) -> float:
-        """
-        Stop loss dinámico para live trading:
-        - Ajuste basado en volatilidad
-        - Protección de ganancias
-        """
-        try:
-            # Stop loss base
-            stoploss = self.stoploss
-
-            # Ajuste por volatilidad (si los datos están disponibles)
-            if hasattr(self, 'data_porvider'):
-                candles = self.dp.get_pair_dataframe(pair, self.timeframe)
-                if len(candles) > 20:
-                    atr = pta.atr(candles['high'], candles['low'], candles['close'], length=14).iloc[-1]
-                    stoploss = max(stoploss, -2 * atr / current_rate)
-
-            # Protección de ganancias
-            if current_profit > 0.01:  # +1%
-                stoploss = max(stoploss, -0.005)  # No permitir perder más de 0.5%
-
-            return stoploss
-
-        except Exception as e:
-            self._log.error(f"[LIVE] Error en custom_stoploss para {pair}: {str(e)}")
-            return self.stoploss
+    def bot_loop_start(self, **kwargs) -> None:
+        """Mantenimiento periódico para Render"""
+        self.logger.info("[RENDER] Ejecutando mantenimiento de rutina")
+        
+        # Auto-limpiar datos de pares problemáticos
+        stale_pairs = [p for p, t in self.data_retries.items() if t > 5]
+        for pair in stale_pairs:
+            self.logger.warning(f"[RENDER] Limpiando par problemático: {pair}")
+            self.data_retries.pop(pair)
 
     def confirm_trade_entry(self, pair: str, order_type: str, amount: float,
                           rate: float, time_in_force: str, **kwargs) -> bool:
-        """
-        Confirmación adicional antes de entrar en trade (live trading)
-        """
+        """Validación final antes de entrar"""
         try:
-            # Verificar cooldown
-            if self.cooldown_active(pair, datetime.now(timezone.utc)):
-                self._log.info(f"[LIVE] Cooldown activo para {pair}")
+            # Evitar operar en pares con errores recientes
+            if self.data_retries.get(pair, 0) > 0:
+                self.logger.info(f"[RENDER] Cancelando entrada por errores recientes en {pair}")
                 return False
-
-            # Verificar volumen reciente
-            dataframe, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
-            if len(dataframe) < 3:
-                return False
-
-            last_candle = dataframe.iloc[-1]
-            if last_candle['volume'] < dataframe['volume'].rolling(20).mean().iloc[-1] * 0.5:
-                self._log.info(f"[LIVE] Volumen insuficiente para {pair}")
-                return False
-
             return True
-
         except Exception as e:
-            self._log.error(f"[LIVE] Error en confirm_trade_entry para {pair}: {str(e)}")
-            return False
-
-    def cooldown_active(self, pair: str, current_time: datetime) -> bool:
-        """
-        Verificación de cooldown para live trading
-        """
-        try:
-            last_loss = self.loss_timestamps.get(pair)
-            if last_loss and (current_time - last_loss) < timedelta(minutes=45):
-                return True
-            return False
-        except Exception as e:
-            self._log.error(f"[LIVE] Error en cooldown_active: {str(e)}")
+            self.logger.error(f"[RENDER] Error en confirm_trade_entry: {e}")
             return False

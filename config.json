@@ -7,6 +7,7 @@
     "strategy": "MiEstrategia",
     "tradable_balance_ratio": 1.0,
     "fiat_display_currency": "USD",
+    "worker_count": 1,
     "dry_run": false,
     "dry_run_wallet": 0,
     "cancel_open_orders_on_exit": true,
@@ -43,6 +44,7 @@
         "AVAX/USD", 
         "ARB/USD",
         "ADA/USD",
+        "SOL/USD",
         "XRP/USD",
         "DOGE/USD",
         "INJ/USD"
