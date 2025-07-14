@@ -201,8 +201,10 @@ class MiEstrategia(IStrategy):
             return dataframe
 
         row = dataframe.iloc[-1]
+        if dataframe.empty or not dataframe.index.is_monotonic_increasing:
+            return dataframe
+
         if self.cooldown_active(metadata['pair'], metadata['datetime']):
-            dataframe.loc[dataframe.index[-1], 'enter_long'] = 0
             return dataframe
 
 
