@@ -195,10 +195,14 @@ class MiEstrategia(IStrategy):
         conditions.append(dataframe['close'] > dataframe['ema_200'])
 
         # 📌 Verificar cooldown por pérdida anterior
-        row = dataframe.iloc[-1]  # ✅ Corregido: se define row antes de usarlo
-        if self.cooldown_active(metadata['pair'], metadata['datetime']):
-            dataframe.loc[row.index, 'enter_long'] = 0
+        if dataframe.empty:
             return dataframe
+
+        row = dataframe.iloc[-1]
+        if self.cooldown_active(metadata['pair'], metadata['datetime']):
+            dataframe.loc[dataframe.index[-1], 'enter_long'] = 0
+            return dataframe
+
 
         # ✅ Punto 7: Cooldown por pérdidas anteriores
         pair = metadata['pair']
