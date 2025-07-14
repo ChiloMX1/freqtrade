@@ -178,7 +178,11 @@ class MiEstrategia(IStrategy):
 
         dataframe = dataframe.copy()
         dataframe.dropna(inplace=True)
-        dataframe['enter_long'] = 0  # Inicialización segura
+        if dataframe.empty or not dataframe.index.is_monotonic_increasing:
+            return dataframe
+
+        if 'enter_long' not in dataframe.columns:
+            dataframe['enter_long'] = pd.Series(index=dataframe.index, dtype=int, data=0)
 
         conditions = []
         conditions.append(dataframe['rsi'] > 50)
@@ -206,18 +210,25 @@ class MiEstrategia(IStrategy):
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         if dataframe.empty or not dataframe.index.is_monotonic_increasing:
             return dataframe
-        # Pre-inicializar columna de señal de salida
-        dataframe['exit_long'] = 0  # por defecto, no salir
-        # Construir máscara booleana para la condición de salida
-        exit_mask = (
-            (crossed_above(dataframe["rsi"], self.sell_rsi.value)) &
-            (dataframe["tema"] > dataframe["bb_middleband"]) &
-            (dataframe["tema"] < dataframe["tema"].shift(1)) &
-            (dataframe["volume"] > 0)
-        )
-        # Asignar señal de salida solo donde la condición es True
-        if not exit_mask.empty and exit_mask.any():
-            dataframe.loc[exit_mask, "exit_long"] = 1
+
+        # Pre-inicializar la columna de salida de forma segura
+        if 'exit_long' not in dataframe.columns:
+            dataframe['exit_long'] = pd.Series(index=dataframe.index, dtype=int, data=0)
+
+        try:
+            exit_mask = (
+                (crossed_above(dataframe["rsi"], self.sell_rsi.value)) &
+                (dataframe["tema"] > dataframe["bb_middleband"]) &
+                (dataframe["tema"] < dataframe["tema"].shift(1)) &
+                (dataframe["volume"] > 0)
+            )
+
+            if not exit_mask.empty and exit_mask.any():
+                dataframe.loc[exit_mask, "exit_long"] = 1
+
+        except Exception as e:
+            self.logger.warning(f"Error en populate_exit_trend para {metadata['pair']}: {str(e)}")
+
         return dataframe
 
 
