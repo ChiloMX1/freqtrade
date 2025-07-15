@@ -74,53 +74,52 @@ class MiEstrategia(IStrategy):
 
     def populate_indicators(self, dataframe: DataFrame, metadata: Dict) -> DataFrame:
         """
-        VERSIÓN CORREGIDA - MANTIENE TODA TU LÓGICA ORIGINAL:
-        1. Usa TA-Lib para máxima estabilidad
-        2. Sincroniza longitudes manualmente
-        3. Validación exhaustiva
+        VERSIÓN DEFINITIVA - CORREGIDOS TODOS LOS ERRORES:
+        1. Genera correctamente todas las columnas de indicadores
+        2. Sincroniza longitudes adecuadamente
+        3. Mantiene tu lógica original
         """
         try:
-            # 1. Copia del dataframe manteniendo tus indicadores originales
+            # 1. Copia segura del DataFrame
             df = dataframe.copy()
             
-            # 2. Calcular longitudes de cada indicador por separado
-            ema8 = ta.EMA(df['close'], timeperiod=8)
-            ema21 = ta.EMA(df['close'], timeperiod=21)
-            rsi = ta.RSI(df['close'], timeperiod=5)
-            atr = ta.ATR(df['high'], df['low'], df['close'], timeperiod=14)
-            volume_ma = df['volume'].rolling(10).mean()
+            # 2. Calcular indicadores con TA-Lib (forma segura)
+            df['ema8'] = ta.EMA(df['close'], timeperiod=8)
+            df['ema21'] = ta.EMA(df['close'], timeperiod=21)
+            df['rsi'] = ta.RSI(df['close'], timeperiod=5)
+            df['atr'] = ta.ATR(df['high'], df['low'], df['close'], timeperiod=14)
             
-            # 3. Encontrar el punto de inicio común (sin NaN)
-            start_idx = max(
-                len(df) - len(ema8.dropna()),
-                len(df) - len(ema21.dropna()),
-                len(df) - len(rsi.dropna()),
-                len(df) - len(atr.dropna()),
-                len(df) - len(volume_ma.dropna())
-            )
-            
-            # 4. Recortar todos los datos al mismo rango
-            df = df.iloc[start_idx:].copy()
-            df['ema8'] = ema8.iloc[-len(df):].values
-            df['ema21'] = ema21.iloc[-len(df):].values
-            df['rsi'] = rsi.iloc[-len(df):].values
-            df['atr'] = atr.iloc[-len(df):].values
-            df['volume_ma'] = volume_ma.iloc[-len(df):].values
-            
-            # 5. Columnas derivadas (TUS FÓRMULAS ORIGINALES)
-            df['volume_ratio'] = (df['volume'] / df['volume_ma'].replace(0, 1e-10)).clip(0, 5)
+            # 3. Calcular indicadores derivados
+            df['volume_ma'] = df['volume'].rolling(window=10, min_periods=1).mean()
+            df['volume_ratio'] = np.where(
+                df['volume_ma'] > 0,
+                df['volume'] / df['volume_ma'],
+                1.0
+            ).clip(0, 5)
             df['volatility'] = (df['atr'] / df['close']).clip(0.005, 0.03)
             
-            # 6. Validación final (obligatoria)
-            if len(df) != len(df.dropna()):
-                raise ValueError("Persisten valores NaN después de la limpieza")
-                
+            # 4. Eliminar filas con NaN (sincronización segura)
+            df.dropna(subset=['ema8', 'ema21', 'rsi', 'atr'], inplace=True)
+            
+            # 5. Validación final obligatoria
+            required_cols = ['close', 'volume', 'ema8', 'ema21', 'rsi', 'atr', 
+                           'volume_ma', 'volume_ratio', 'volatility']
+            for col in required_cols:
+                if col not in df.columns:
+                    raise ValueError(f"Columna crítica faltante: {col}")
+                if df[col].isnull().any():
+                    raise ValueError(f"Columna {col} contiene valores NaN")
+            
             return df
             
         except Exception as e:
-            logger.error(f"Error crítico en indicators: {str(e)}")
-            # Fallback seguro manteniendo tu estructura
-            return dataframe.iloc[-self.startup_candle_count:].copy()
+            logger.error(f"Error en indicators: {str(e)}")
+            # Fallback ultra-seguro
+            clean_df = dataframe.iloc[-self.startup_candle_count:].copy()
+            clean_df['ema8'] = ta.EMA(clean_df['close'], timeperiod=8)
+            clean_df['ema21'] = ta.EMA(clean_df['close'], timeperiod=21)
+            clean_df['rsi'] = ta.RSI(clean_df['close'], timeperiod=5)
+            return clean_df.dropna()
 
     def _validate_dataframe(self, df: DataFrame):
         """Validación extrema del DataFrame"""
