@@ -124,6 +124,7 @@ class MiEstrategia(IStrategy):
             
             # B. EMA rápida (5 velas)
             df['ema5'] = pta.ema(df['close'], length=5)
+            df['ema20'] = pta.ema(df['close'], length=20)
             
             # C. Estocástico rápido (3,3,3)
             stoch = pta.stoch(df['high'], df['low'], df['close'], k=3, d=3)
@@ -157,7 +158,8 @@ class MiEstrategia(IStrategy):
             # Condiciones de Entrada
             conditions = [
                 df['rsi'] < self.buy_rsi.value,  # RSI bajo
-                df['close'] > df['ema20'],  # Precio sobre EMA rápida
+                (df['close'] > df['ema5']), # Tendencia inmediata
+                df['close'] > df['ema20'],  # Filtro de tendencia global (¡Ahora existe!)
                 df['volume_ratio'] > self.buy_volume.value,  # Volumen alto
                 df['STOCHk_3_3_3'] < 30,  # Estocástico en zona de compra
                 df['STOCHd_3_3_3'] < 30
