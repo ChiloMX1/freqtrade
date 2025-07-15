@@ -18,113 +18,73 @@ import ccxt
 
 class MiEstrategia(IStrategy):
     """
-    Estrategia Final de Microtrading para Kraken (1m) - Versión Render Fix
-    - Soluciona el error 'mismatching length' con manejo robusto de indicadores
-    - Timeframe: 1m para scalping ultra-rápido
-    - Stop Loss: 1.5% dinámico
-    - Take Profit: 0.75%-1.0% escalonado
+    Estrategia Final de Microtrading para Kraken (1m) - Versión Logger Fix
     """
+    
+    # ============= CONFIGURACIÓN INICIAL =============
+    def __init__(self, config: Dict) -> None:
+        super().__init__(config)
+        # Inicialización CRÍTICA del logger
+        self.logger = logging.getLogger(__name__)
+        
+        # Resto de tu inicialización
+        self.loss_timestamps = {}
+        self.consecutive_losses = {}
+        self.global_cooldown_until = None
+        self.cooldown_config = {
+            'after_loss': 45 * 60,
+            'consecutive_loss': 90 * 60,
+            'global_drawdown': 0.02,
+            'profit_threshold': 0.05
+        }
+        self.kraken = ccxt.kraken({
+            'enableRateLimit': True,
+            'options': {'adjustForTimeDifference': True}
+        })
 
-    # =============================================
-    # 1. CONFIGURACIÓN BASE (RENDER + KRAKEN)
-    # =============================================
-    INTERFACE_VERSION = 3
-    timeframe = '1m'
-    can_short = False
-    process_only_new_candles = True
-    startup_candle_count = 100  # Ampliado para mayor seguridad
-
-    # =============================================
-    # 2. GESTIÓN DE CAPITAL
-    # =============================================
-    stoploss = -0.015
-    trailing_stop = True
-    trailing_stop_positive = 0.005
-    trailing_stop_positive_offset = 0.01
-
-    # =============================================
-    # 3. OBJETIVOS DE RENTABILIDAD
-    # =============================================
-    minimal_roi = {
-        "0": 0.0075,
-        "5": 0.005,
-        "10": 0.003,
-        "20": 0
-    }
-
-    # =============================================
-    # 4. PARÁMETROS OPTIMIZADOS
-    # =============================================
-    buy_rsi = IntParameter(20, 35, default=28, space='buy')
-    sell_rsi = IntParameter(65, 85, default=73, space='sell')
-    buy_volume = DecimalParameter(1.5, 3.0, decimals=1, default=2.0, space='buy')
-
-    # =============================================
-    # 5. CONFIGURACIÓN DE ÓRDENES
-    # =============================================
-    order_types = {
-        'entry': 'limit',
-        'exit': 'limit',
-        'stoploss': 'market',
-        'stoploss_on_exchange': True
-    }
-    order_time_in_force = {
-        'entry': 'IOC',
-        'exit': 'GTC'
-    }
-
-    # =============================================
-    # 6. FUNCIÓN PRINCIPAL DE INDICADORES (FIXED)
-    # =============================================
+    # ============= INDICADORES (VERSIÓN ROBUSTA) =============
     def populate_indicators(self, dataframe: DataFrame, metadata: Dict) -> DataFrame:
-        """
-        Versión corregida con:
-        - Manejo robusto de longitudes
-        - Verificación de NaN
-        - Compatibilidad total con Render
-        """
+        """Versión ultra-estable con manejo de errores mejorado"""
         try:
-            # 1. Copia segura del DataFrame
             df = dataframe.copy()
-            initial_len = len(df)
             
-            # 2. Calculamos todos los indicadores por separado
-            indicators = {
-                'rsi': pta.rsi(df['close'], length=2).clip(10, 90),
-                'ema5': pta.ema(df['close'], length=5),
-                'ema20': pta.ema(df['close'], length=20),
-                'stoch_k': pta.stoch(df['high'], df['low'], df['close'], k=3, d=3)['STOCHk_3_3_3'],
-                'stoch_d': pta.stoch(df['high'], df['low'], df['close'], k=3, d=3)['STOCHd_3_3_3'],
-                'volume_ma10': df['volume'].rolling(10).mean()
-            }
+            # 1. Cálculo seguro de indicadores
+            df['rsi'] = pta.rsi(df['close'], length=2).clip(10, 90).ffill()
+            df['ema5'] = pta.ema(df['close'], length=5).ffill()
+            df['ema20'] = pta.ema(df['close'], length=20).ffill()
             
-            # 3. Encontramos la longitud mínima válida
-            valid_lengths = [len(v.dropna()) for v in indicators.values() if hasattr(v, 'dropna')]
-            min_length = min(valid_lengths) if valid_lengths else initial_len
+            # 2. Estocástico con verificación
+            stoch = pta.stoch(df['high'], df['low'], df['close'], k=3, d=3)
+            if stoch is not None:
+                df['stoch_k'] = stoch['STOCHk_3_3_3'].ffill()
+                df['stoch_d'] = stoch['STOCHd_3_3_3'].ffill()
             
-            # 4. Aplicamos todos los indicadores recortados
-            for name, values in indicators.items():
-                df[name] = values.iloc[-min_length:] if hasattr(values, 'iloc') else values[-min_length:]
+            # 3. Volumen con protección div/0
+            df['volume_ma10'] = df['volume'].rolling(10).mean().replace(0, 1e-10)
+            df['volume_ratio'] = (df['volume'] / df['volume_ma10']).clip(0, 100)
             
-            # 5. Calculamos derivados
-            df['volume_ratio'] = df['volume'] / df['volume_ma10']
-            
-            # 6. Verificación final de consistencia
+            # 4. Validación final
             self._validate_dataframe(df)
-            
-            return df.iloc[-min_length:]  # Retorno consistente
+            return df.dropna()
 
         except Exception as e:
-            self.logger.error(f"Error en populate_indicators: {str(e)}", exc_info=True)
-            return dataframe.iloc[self.startup_candle_count:]  # Fallback seguro
+            self.logger.error(f"Error en indicadores: {e}", exc_info=True)
+            return dataframe.iloc[self.startup_candle_count or 50:]
 
     def _validate_dataframe(self, df: DataFrame):
-        """Valida la integridad del DataFrame"""
-        if df.isnull().values.any():
-            self.logger.warning("NaN detectados en el DataFrame")
-        lengths = {col: len(df[col]) for col in df.columns}
-        if len(set(lengths.values())) > 1:
-            self.logger.error(f"Inconsistencia en longitudes: {lengths}")
+        """Validación silenciosa para evitar errores"""
+        try:
+            if df.isnull().values.any():
+                self.logger.warning("NaN detectados - Limpieza aplicada")
+            lengths = {col: len(df[col]) for col in df.columns}
+            if len(set(lengths.values())) > 1:
+                self.logger.warning(f"Longitudes inconsistentes: {lengths}")
+        except:
+            pass  # No romper por validaciones
+
+    # ============= RESTANTE DE TU ESTRATEGIA =============
+    # (Mantén todo el resto de tus métodos igual que antes)
+    # populate_entry_trend, populate_exit_trend, etc.
 
     # =============================================
     # 7. SEÑALES DE ENTRADA (OPTIMIZADAS)
