@@ -18,7 +18,7 @@ import ccxt
 
 logger = logging.getLogger(__name__)
 
-class MicroScalperUltimate(IStrategy):
+class MiEstrategia(IStrategy):
     """
     Estrategia de Microtrading Agresivo optimizada para:
     - Alto volumen de operaciones (15-20 trades/bot/día)
