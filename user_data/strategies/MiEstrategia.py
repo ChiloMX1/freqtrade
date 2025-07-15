@@ -30,7 +30,7 @@ class MiEstrategia(IStrategy):
     # 1. CONFIGURACIÓN BASE (RENDER + KRAKEN)
     # =============================================
     INTERFACE_VERSION = 3
-    timeframe = '3m'  # Timeframe ultra-corto para más oportunidades
+    timeframe = '1m'  # Timeframe ultra-corto para más oportunidades
     can_short = False  # Solo operaciones largas
     process_only_new_candles = True  # Optimiza recursos en Render
     startup_candle_count = 50  # Velas iniciales para cálculos
@@ -47,10 +47,9 @@ class MiEstrategia(IStrategy):
     # 3. OBJETIVOS DE RENTABILIDAD (ROI escalonado)
     # =============================================
     minimal_roi = {
-        "0": 0.0075,  # 0.75% ROI inmediato
-        "5": 0.005,   # 0.5% después de 5 velas
-        "10": 0.003,  # 0.3% después de 10 velas
-        "20": 0       # Cierre forzoso a las 20 velas (60 minutos)
+        "0": 0.005,  # 0.5% inmediato
+        "3": 0.003,  # 0.3% a los 3 minutos
+        "6": 0       # Cierre a los 6 minutos
     }
 
     # =============================================
@@ -121,7 +120,7 @@ class MiEstrategia(IStrategy):
             df = dataframe.copy()
             
             # A. RSI de 3 periodos (ultra-corto)
-            df['rsi'] = pta.rsi(df['close'], length=3).clip(5, 95)  # Evita valores extremos
+            df['rsi'] = pta.rsi(df['close'], length=2).clip(10, 90)  # Evita valores extremos
             
             # B. EMA rápida (5 velas)
             df['ema5'] = pta.ema(df['close'], length=5)
@@ -158,7 +157,7 @@ class MiEstrategia(IStrategy):
             # Condiciones de Entrada
             conditions = [
                 df['rsi'] < self.buy_rsi.value,  # RSI bajo
-                df['close'] > df['ema5'],  # Precio sobre EMA rápida
+                df['close'] > df['ema20'],  # Precio sobre EMA rápida
                 df['volume_ratio'] > self.buy_volume.value,  # Volumen alto
                 df['STOCHk_3_3_3'] < 30,  # Estocástico en zona de compra
                 df['STOCHd_3_3_3'] < 30
