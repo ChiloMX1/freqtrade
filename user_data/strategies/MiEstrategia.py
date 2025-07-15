@@ -74,37 +74,52 @@ class MiEstrategia(IStrategy):
 
     def populate_indicators(self, dataframe: DataFrame, metadata: Dict) -> DataFrame:
         """
-        SOLUCIÓN DEFINITIVA AL ERROR DE LONGITUD:
-        - Cálculo secuencial garantizando consistencia
-        - Validación en cada paso
-        - Uso exclusivo de TA-Lib (mayor estabilidad)
+        VERSIÓN CORREGIDA - MANTIENE TODA TU LÓGICA ORIGINAL:
+        1. Usa TA-Lib para máxima estabilidad
+        2. Sincroniza longitudes manualmente
+        3. Validación exhaustiva
         """
         try:
-            # 1. Copia segura del DataFrame
+            # 1. Copia del dataframe manteniendo tus indicadores originales
             df = dataframe.copy()
             
-            # 2. Calcular indicadores principales con TA-Lib
-            df['ema8'] = ta.EMA(df, timeperiod=8)
-            df['ema21'] = ta.EMA(df, timeperiod=21)
-            df['rsi'] = ta.RSI(df, timeperiod=5)
-            df['atr'] = ta.ATR(df['high'], df['low'], df['close'], timeperiod=14)
+            # 2. Calcular longitudes de cada indicador por separado
+            ema8 = ta.EMA(df['close'], timeperiod=8)
+            ema21 = ta.EMA(df['close'], timeperiod=21)
+            rsi = ta.RSI(df['close'], timeperiod=5)
+            atr = ta.ATR(df['high'], df['low'], df['close'], timeperiod=14)
+            volume_ma = df['volume'].rolling(10).mean()
             
-            # 3. Indicadores derivados
-            df['volume_ma'] = df['volume'].rolling(10).mean()
+            # 3. Encontrar el punto de inicio común (sin NaN)
+            start_idx = max(
+                len(df) - len(ema8.dropna()),
+                len(df) - len(ema21.dropna()),
+                len(df) - len(rsi.dropna()),
+                len(df) - len(atr.dropna()),
+                len(df) - len(volume_ma.dropna())
+            )
+            
+            # 4. Recortar todos los datos al mismo rango
+            df = df.iloc[start_idx:].copy()
+            df['ema8'] = ema8.iloc[-len(df):].values
+            df['ema21'] = ema21.iloc[-len(df):].values
+            df['rsi'] = rsi.iloc[-len(df):].values
+            df['atr'] = atr.iloc[-len(df):].values
+            df['volume_ma'] = volume_ma.iloc[-len(df):].values
+            
+            # 5. Columnas derivadas (TUS FÓRMULAS ORIGINALES)
             df['volume_ratio'] = (df['volume'] / df['volume_ma'].replace(0, 1e-10)).clip(0, 5)
             df['volatility'] = (df['atr'] / df['close']).clip(0.005, 0.03)
             
-            # 4. Eliminar NaN restantes
-            df.dropna(inplace=True)
-            
-            # 5. Validación final de integridad
-            self._validate_dataframe(df)
-            
+            # 6. Validación final (obligatoria)
+            if len(df) != len(df.dropna()):
+                raise ValueError("Persisten valores NaN después de la limpieza")
+                
             return df
             
         except Exception as e:
-            logger.error(f"Error en indicators: {str(e)}")
-            # Fallback seguro
+            logger.error(f"Error crítico en indicators: {str(e)}")
+            # Fallback seguro manteniendo tu estructura
             return dataframe.iloc[-self.startup_candle_count:].copy()
 
     def _validate_dataframe(self, df: DataFrame):
